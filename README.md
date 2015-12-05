@@ -81,13 +81,13 @@ tools/esptool.py supported NodeMCU devkit automatic flash.
     <th scope="col">IO index</th><th scope="col">ESP8266 pin</th><th scope="col">IO index</th><th scope="col">ESP8266 pin</th>
   </tr>
   <tr>
-    <td>0 [*]</td><td>GPIO16</td><td>8</td><td>GPIO15</td>
+    <td>0 [*]</td><td>GPIO16</td><td>8</td><td>GPIO15 (SPI CS)</td>
   </tr>
   <tr>
-    <td>1</td><td>GPIO5</td><td>9</td><td>GPIO3</td>
+    <td>1</td><td>GPIO5</td><td>9</td><td>GPIO3 (UART RX)</td>
    </tr>
    <tr>
-    <td>2</td><td>GPIO4</td><td>10</td><td>GPIO1</td>
+    <td>2</td><td>GPIO4</td><td>10</td><td>GPIO1 (UART TX)</td>
   </tr>
   <tr>
     <td>3</td><td>GPIO0</td><td>11</td><td>GPIO9</td>
@@ -96,13 +96,13 @@ tools/esptool.py supported NodeMCU devkit automatic flash.
     <td>4</td><td>GPIO2</td><td>12</td><td>GPIO10</td>
   </tr>
   <tr>
-    <td>5</td><td>GPIO14</td><td></td><td></td>
+    <td>5</td><td>GPIO14 (SPI CLK)</td><td></td><td></td>
    </tr>
    <tr>
-    <td>6</td><td>GPIO12</td><td></td><td></td>
+    <td>6</td><td>GPIO12 (SPI MISO)</td><td></td><td></td>
   </tr>
   <tr>
-    <td>7</td><td>GPIO13</td><td></td><td></td>
+    <td>7</td><td>GPIO13 (SPI MOSI)</td><td></td><td></td>
    </tr>
 </table>
 #### [*] D0(GPIO16) can only be used as gpio read/write. no interrupt supported. no pwm/i2c/ow supported.
@@ -359,14 +359,33 @@ cu:send("hello")
     package.loaded["ds18b20"]=nil
 ```
 
-####Operate a display via I2c with u8glib
-u8glib is a graphics library with support for many different displays.
-The integration in nodemcu is developed for SSD1306 based display attached via the I2C port. Further display types and SPI connectivity will be added in the future.
+####Operate a display with u8glib
+u8glib is a graphics library with support for many different displays. The nodemcu firmware supports a subset of these.
+Both I2C and SPI:
+* sh1106_128x64
+* ssd1306 - 128x64 and 64x48 variants
+* ssd1309_128x64
+* ssd1327_96x96_gr
+* uc1611 - dogm240 and dogxl240 variants
 
-U8glib v1.17
+SPI only:
+* ld7032_60x32
+* pcd8544_84x48
+* pcf8812_96x65
+* ssd1322_nhd31oled - bw and gr variants
+* ssd1325_nhd27oled - bw and gr variants
+* ssd1351_128x128 - gh and hicolor variants
+* st7565_64128n - variants 64128n, dogm128/132, lm6059/lm6063, c12832/c12864
+* uc1601_c128032
+* uc1608 - 240x128 and 240x64 variants
+* uc1610_dogxl160 - bw and gr variants
+* uc1611 - dogm240 and dogxl240 variants
+* uc1701 - dogs102 and mini12864 variants
+
+U8glib v1.18.1
 
 #####I2C connection
-Hook up SDA and SCL to any free GPIOs. Eg. `lua_examples/u8glib/graphics_test.lua` expects SDA=5 (GPIO14) and SCL=6 (GPIO12). They are used to set up nodemcu's I2C driver before accessing the display:
+Hook up SDA and SCL to any free GPIOs. Eg. [u8g_graphics_test.lua](lua_examples/u8glib/u8g_graphics_test.lua) expects SDA=5 (GPIO14) and SCL=6 (GPIO12). They are used to set up nodemcu's I2C driver before accessing the display:
 ```lua
 sda = 5
 scl = 6
@@ -384,9 +403,9 @@ All other pins can be assigned to any available GPIO:
 * D/C
 * RES (optional for some displays)
 
-Also refer to the initialization sequence eg in `lua_examples/u8glib/graphics_test.lua`:
+Also refer to the initialization sequence eg in [u8g_graphics_test.lua](lua_examples/u8glib/u8g_graphics_test.lua):
 ```lua
-spi.setup(1, spi.MASTER, spi.CPOL_LOW, spi.CPHA_LOW, spi.DATABITS_8, 0)
+spi.setup(1, spi.MASTER, spi.CPOL_LOW, spi.CPHA_LOW, 8, 8)
 ```
 
 
@@ -403,14 +422,28 @@ SSD1306 via SPI:
 cs  = 8 -- GPIO15, pull-down 10k to GND
 dc  = 4 -- GPIO2
 res = 0 -- GPIO16, RES is optional YMMV
-disp = u8g.ssd1306_128x64_spi(cs, dc, res)
+disp = u8g.ssd1306_128x64_hw_spi(cs, dc, res)
 ```
 
 This object provides all of u8glib's methods to control the display.
-Again, refer to `lua_examples/u8glib/graphics_test.lua` to get an impression how this is achieved with Lua code. Visit the [u8glib homepage](https://code.google.com/p/u8glib/) for technical details.
+Again, refer to [u8g_graphics_test.lua](lua_examples/u8glib/u8g_graphics_test.lua) to get an impression how this is achieved with Lua code. Visit the [u8glib homepage](https://github.com/olikraus/u8glib) for technical details.
+
+#####Displays
+I2C and HW SPI based displays with support in u8glib can be enabled. To get access to the respective constructors, add the desired entries to the I2C or SPI display tables in [app/include/u8g_config.h](app/include/u8g_config.h):
+```c
+#define U8G_DISPLAY_TABLE_I2C                   \
+    U8G_DISPLAY_TABLE_ENTRY(ssd1306_128x64_i2c) \
+
+#define U8G_DISPLAY_TABLE_SPI                      \
+    U8G_DISPLAY_TABLE_ENTRY(ssd1306_128x64_hw_spi) \
+    U8G_DISPLAY_TABLE_ENTRY(pcd8544_84x48_hw_spi)  \
+    U8G_DISPLAY_TABLE_ENTRY(pcf8812_96x65_hw_spi)  \
+```
+An exhaustive list of available displays can be found in the [u8g module wiki entry](https://github.com/nodemcu/nodemcu-firmware/wiki/nodemcu_api_en#u8g-module).
+
 
 #####Fonts
-u8glib comes with a wide range of fonts for small displays. Since they need to be compiled into the firmware image, you'd need to include them in `app/include/u8g_config.h` and recompile. Simply add the desired fonts to the font table:
+u8glib comes with a wide range of fonts for small displays. Since they need to be compiled into the firmware image, you'd need to include them in [app/include/u8g_config.h](app/include/u8g_config.h) and recompile. Simply add the desired fonts to the font table:
 ```c
 #define U8G_FONT_TABLE \
     U8G_FONT_TABLE_ENTRY(font_6x10)  \
@@ -419,7 +452,7 @@ u8glib comes with a wide range of fonts for small displays. Since they need to b
 They'll be available as `u8g.<font_name>` in Lua.
 
 #####Bitmaps
-Bitmaps and XBMs are supplied as strings to `drawBitmap()` and `drawXBM()`. This off-loads all data handling from the u8g module to generic methods for binary files. See `lua_examples/u8glib/u8g_bitmaps.lua`.
+Bitmaps and XBMs are supplied as strings to `drawBitmap()` and `drawXBM()`. This off-loads all data handling from the u8g module to generic methods for binary files. See [u8g_bitmaps.lua](lua_examples/u8glib/u8g_bitmaps.lua).
 In contrast to the source code based inclusion of XBMs into u8glib, it's required to provide precompiled binary files. This can be performed online with [Online-Utility's Image Converter](http://www.online-utility.org/image_converter.jsp): Convert from XBM to MONO format and upload the binary result with [nodemcu-uploader.py](https://github.com/kmpm/nodemcu-uploader).
 
 #####Unimplemented functions
@@ -436,6 +469,61 @@ In contrast to the source code based inclusion of XBMs into u8glib, it's require
   - [ ] setHardwareBackup()
   - [ ] setRGB()
   - [ ] setDefaultMidColor()
+
+####Operate a display with ucglib
+Ucglib is a graphics library with support for color TFT displays.
+
+Ucglib v1.3.3
+
+#####SPI connection
+The HSPI module is used, so certain pins are fixed:
+* HSPI CLK  = GPIO14
+* HSPI MOSI = GPIO13
+* HSPI MISO = GPIO12 (not used)
+
+All other pins can be assigned to any available GPIO:
+* CS
+* D/C
+* RES (optional for some displays)
+
+Also refer to the initialization sequence eg in [GraphicsTest.lua](lua_examples/ucglib/GraphicsRest.lua):
+```lua
+spi.setup(1, spi.MASTER, spi.CPOL_LOW, spi.CPHA_LOW, 8, 8)
+```
+
+#####Library usage
+The Lua bindings for this library closely follow ucglib's object oriented C++ API. Based on the ucg class, you create an object for your display type.
+
+ILI9341 via SPI:
+```lua
+cs  = 8 -- GPIO15, pull-down 10k to GND
+dc  = 4 -- GPIO2
+res = 0 -- GPIO16, RES is optional YMMV
+disp = ucg.ili9341_18x240x320_hw_spi(cs, dc, res)
+```
+
+This object provides all of ucglib's methods to control the display.
+Again, refer to [GraphicsTest.lua](lua_examples/ucglib/GraphicsTest.lua) to get an impression how this is achieved with Lua code. Visit the [ucglib homepage](https://github.com/olikraus/ucglib) for technical details.
+
+#####Displays
+To get access to the display constructors, add the desired entries to the display table in [app/include/ucg_config.h](app/include/ucg_config.h):
+```c
+#define UCG_DISPLAY_TABLE                          \
+    UCG_DISPLAY_TABLE_ENTRY(ili9341_18x240x320_hw_spi, ucg_dev_ili9341_18x240x320, ucg_ext_ili9341_18) \
+    UCG_DISPLAY_TABLE_ENTRY(st7735_18x128x160_hw_spi, ucg_dev_st7735_18x128x160, ucg_ext_st7735_18) \
+```
+
+#####Fonts
+ucglib comes with a wide range of fonts for small displays. Since they need to be compiled into the firmware image, you'd need to include them in [app/include/ucg_config.h](app/include/ucg_config.h) and recompile. Simply add the desired fonts to the font table:
+```c
+#define UCG_FONT_TABLE                              \
+    UCG_FONT_TABLE_ENTRY(font_7x13B_tr)             \
+    UCG_FONT_TABLE_ENTRY(font_helvB12_hr)           \
+    UCG_FONT_TABLE_ENTRY(font_helvB18_hr)           \
+    UCG_FONT_TABLE_ENTRY(font_ncenR12_tr)           \
+    UCG_FONT_TABLE_ENTRY(font_ncenR14_hr)
+```
+They'll be available as `ucg.<font_name>` in Lua.
 
 
 ####Control a WS2812 based light strip
@@ -457,6 +545,9 @@ cs:listen(5683)
 myvar=1
 cs:var("myvar") -- get coap://192.168.18.103:5683/v1/v/myvar will return the value of myvar: 1
 
+all='[1,2,3]'
+cs:var("all", coap.JSON) -- sets content type to json
+
 -- function should tack one string, return one string.
 function myfun(payload)
   print("myfun called")
@@ -471,8 +562,10 @@ cc:post(coap.NON, "coap://192.168.18.100:5683/", "Hello")
 ```
 
 ####cjson
-
 ```lua
+-- Note that when cjson deal with large content, it may fails a memory allocation, and leaks a bit of memory.
+-- so it's better to detect that and schedule a restart. 
+--
 -- Translate Lua value to/from JSON
 -- text = cjson.encode(value)
 -- value = cjson.decode(text)
@@ -482,4 +575,14 @@ value = cjson.decode(json_text)
 value = { true, { foo = "bar" } }
 json_text = cjson.encode(value)
 -- Returns: '[true,{"foo":"bar"}]'
+```
+
+####Read an HX711 load cell ADC.
+Note: currently only chanel A with gain 128 is supported.
+The HX711 is an inexpensive 24bit ADC with programmable 128x, 64x, and 32x gain.  
+```lua
+	-- Initialize the hx711 with clk on pin 5 and data on pin 6
+	hx711.init(5,6)
+	-- Read ch A with 128 gain.
+	raw_data = hx711.read(0)
 ```
